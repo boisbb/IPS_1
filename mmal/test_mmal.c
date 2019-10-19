@@ -2,6 +2,7 @@
 #include <assert.h>
 #include "mmal.h"
 #include <unistd.h>
+#define NDEBUG
 
 void debug_hdr(Header *h, int idx)
 {
@@ -25,6 +26,7 @@ void debug_arena(Arena *a, int idx)
         h = h->next;
         if (h == (Header*)&a[1])
             break;
+
     }
 }
 
@@ -36,8 +38,8 @@ void debug_arenas()
     for (int i = 1; a; i++)
     {
         debug_arena(a, i);
+        a = a->next;
     }
-    printf("NULL\n");
 }
 #else
 #define debug_arenas()
@@ -105,7 +107,7 @@ int main()
      */
     // insert assert here
     debug_arenas();
-
+    exit(0);
     /***********************************************************************/
     // Uvolneni prvniho bloku
     mfree(p1);

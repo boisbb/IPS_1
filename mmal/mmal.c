@@ -8,6 +8,11 @@
 #include <sys/mman.h> // mmap
 #include <stdbool.h> // bool
 
+#ifndef MAP_ANONYMOUS
+#define MAP_ANONYMOUS 0x20
+#endif
+#define ALIGN_WORD(size) ((size + (sizeof(long))) / (sizeof(long))) * (sizeof(long))
+
 #ifdef NDEBUG
 /**
  * The structure header encapsulates data of a single memory block.
@@ -25,7 +30,7 @@ struct header {
     size_t size;
 
     /**
-     * Size of block in bytes allocated for program. asize=0 means the block 
+     * Size of block in bytes allocated for program. asize=0 means the block
      * is not used by a program.
      */
     size_t asize;
@@ -58,9 +63,7 @@ Arena *first_arena = NULL;
 static
 size_t allign_page(size_t size)
 {
-    // FIXME
-    (void)size;
-    return size;
+    return ((size + (PAGE_SIZE)) / (PAGE_SIZE))*PAGE_SIZE;
 }
 
 /**
@@ -81,7 +84,15 @@ Arena *arena_alloc(size_t req_size)
 {
     // FIXME
     (void)req_size;
-    return NULL;
+
+    Arena *tmp_arena = NULL;
+    tmp_arena = mmap(0, req_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    if (tmp_arena == MAP_FAILED) {
+      return NULL;
+    }
+    tmp_arena->size = req_size;
+    tmp_arena->next = NULL;
+    return tmp_arena;
 }
 
 /**
@@ -99,9 +110,19 @@ Arena *arena_alloc(size_t req_size)
 static
 void hdr_ctor(Header *hdr, size_t size)
 {
-    // FIXME
-    (void)hdr;
-    (void)size;
+    hdr->size = size;
+    hdr->asize = 0;
+    hdr->next = (Header *)(&first_arena[1]);
+    return;
+}
+
+static
+int hdr_can_split(Header *hdr, size_t req_size)
+{
+  if (hdr->size >= req_size + 2*sizeof(Header) && req_size % sizeof(long) == 0 && hdr->asize == 0){
+    return 1;
+  }
+  return 0;
 }
 
 /**
@@ -131,10 +152,18 @@ void hdr_ctor(Header *hdr, size_t size)
 static
 Header *hdr_split(Header *hdr, size_t req_size)
 {
-    // FIXME
-    (void)hdr;
-    (void)req_size;
-    return NULL;
+    // Work with new Header
+    Header *new;
+    new = hdr + req_size;
+    hdr_ctor(new, hdr->size - req_size - 2*sizeof(Header));
+    new->next = hdr->next;
+    //
+
+    // Rework the old one
+    hdr->size = req_size;
+    hdr->asize = 0;
+    hdr->next = new;
+    return new;
 }
 
 /**
@@ -165,6 +194,47 @@ void hdr_merge(Header *left, Header *right)
     // FIXME
 }
 
+static
+Header *best_fit(size_t size)
+{
+  Header *tmp_hdr = (Header *)(&first_arena[1]);
+  Header *best_fit_hdr = NULL;
+  int diff_swp = -1;
+  int diff = -1;
+  while(tmp_hdr != NULL){
+    if (tmp_hdr->asize == 0){
+      diff_swp = tmp_hdr->size - (ALIGN_WORD(size));
+      if (diff_swp >= 0 && diff_swp < diff) {
+        diff = diff_swp;
+      }
+      else if (diff == -1){
+        diff = diff_swp;
+        best_fit_hdr = tmp_hdr;
+      }
+    }
+    tmp_hdr = tmp_hdr->next;
+    if (tmp_hdr == (Header*)(&first_arena[1])) {
+      break;
+    }
+  }
+
+  // In case that no block was found -> new arena needs to be created
+  if (best_fit_hdr == NULL){
+    return NULL;
+  }
+  if (hdr_can_split(best_fit_hdr, ALIGN_WORD(size))) {
+    best_fit_hdr->next = hdr_split(best_fit_hdr, ALIGN_WORD(size));
+    return best_fit_hdr;
+  }
+  else {
+    best_fit_hdr->asize = size;
+    return best_fit_hdr;
+  }
+
+
+
+}
+
 /**
  * Allocate memory. Use best-fit search of available block.
  * @param size      requested size for program
@@ -173,7 +243,29 @@ void hdr_merge(Header *left, Header *right)
 void *mmalloc(size_t size)
 {
     // FIXME
-    (void)size;
+    Header *tmp;
+    if (first_arena == NULL) {
+      printf("\n----------- THERE SHOULD BE ONLY ONE FIRST_ARENA ALLOCATION -------------\n\n");
+      first_arena = arena_alloc(allign_page(size));
+      hdr_ctor((Header *)&first_arena[1], allign_page(size) - sizeof(Arena) - sizeof(Header));
+      first_arena[1].next = hdr_split((Header *)(&first_arena[1]), ALIGN_WORD(size));
+      tmp = (Header *)(&first_arena[1]);
+      tmp->asize = 42;
+
+      // My testing //////////////////////////////////////////////////////////
+      printf("------> MMAP TEST | HEADER TEST <------\n");
+      printf("------> %s        |          <------\n", first_arena == NULL ? "true" : "false");
+      printf("---------> ARENA SIZE: %ld | H1 SIZE: %ld ASIZE: %ld | SECOND BLOCK SIZE: %ld ASIZE: %ld\n", first_arena->size, tmp->size, tmp->asize, tmp->next->size, tmp->next->asize);
+      printf("_________________________\n");
+      ///////////////////////////////////////////////////////////////////////
+
+      return &tmp[1];
+    }
+    tmp = best_fit(size);
+    return &tmp[1];
+
+
+
     return NULL;
 }
 
