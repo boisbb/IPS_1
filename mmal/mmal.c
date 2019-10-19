@@ -249,16 +249,16 @@ void *mmalloc(size_t size)
       printf("\n----------- THERE SHOULD BE ONLY ONE FIRST_ARENA ALLOCATION -------------\n\n");
       first_arena = arena_alloc(allign_page(size));
       hdr_ctor((Header *)&first_arena[1], allign_page(size) - sizeof(Arena) - sizeof(Header));
-      first_arena[1].next = hdr_split((Header *)(&first_arena[1]), ALIGN_WORD(size));
+      hdr_split((Header *)(&first_arena[1]), ALIGN_WORD(size));
       tmp = (Header *)(&first_arena[1]);
       tmp->asize = 42;
 
-      // My testing //////////////////////////////////////////////////////////
+      /*/ My testing //////////////////////////////////////////////////////////
       printf("------> MMAP TEST | HEADER TEST <------\n");
       printf("------> %s        |          <------\n", first_arena == NULL ? "true" : "false");
       printf("---------> ARENA SIZE: %ld | H1 SIZE: %ld ASIZE: %ld | SECOND BLOCK SIZE: %ld ASIZE: %ld\n", first_arena->size, tmp->size, tmp->asize, tmp->next->size, tmp->next->asize);
       printf("_________________________\n");
-      ///////////////////////////////////////////////////////////////////////
+      //////////////////////////////////////////////////////////////////////*/
 
       return &tmp[1];
     }
@@ -276,8 +276,16 @@ void *mmalloc(size_t size)
  */
 void mfree(void *ptr)
 {
-    (void)ptr;
-    // FIXME
+  Header *tmp_free = (Header *)(&first_arena[1]);
+
+  // &tmp_free[1] is then adress of a data block behind the header
+  while(1){
+    if (ptr == &tmp_free[1]){
+      break;
+    }
+    tmp_free = tmp_free->next;
+  }
+
 }
 
 /**
