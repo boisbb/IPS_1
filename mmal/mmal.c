@@ -11,7 +11,7 @@
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS 0x20
 #endif
-#define ALIGN_WORD(size) ((size + (sizeof(long))) / (sizeof(long))) * (sizeof(long))
+#define ALIGN_WORD(size) (((size - 1) + (sizeof(long))) / (sizeof(long))) * (sizeof(long))
 
 #ifdef NDEBUG
 /**
@@ -63,7 +63,7 @@ Arena *first_arena = NULL;
 static
 size_t allign_page(size_t size)
 {
-    return ((size + (PAGE_SIZE)) / (PAGE_SIZE))*PAGE_SIZE;
+    return (((size - 1) + (PAGE_SIZE)) / (PAGE_SIZE))*PAGE_SIZE;
 }
 
 /**
@@ -224,6 +224,7 @@ Header *best_fit(size_t size)
   }
   if (hdr_can_split(best_fit_hdr, ALIGN_WORD(size))) {
     best_fit_hdr->next = hdr_split(best_fit_hdr, ALIGN_WORD(size));
+    best_fit_hdr->asize = size;
     return best_fit_hdr;
   }
   else {
