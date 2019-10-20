@@ -155,7 +155,8 @@ Header *hdr_split(Header *hdr, size_t req_size)
     // Work with new Header
     Header *new;
     new = hdr + req_size;
-    hdr_ctor(new, hdr->size - req_size - 2*sizeof(Header));
+    // FIXME Isn't here supposed to be "- 2*sozeof(Header)"
+    hdr_ctor(new, hdr->size - req_size - sizeof(Header));
     new->next = hdr->next;
     //
 
@@ -175,10 +176,15 @@ Header *hdr_split(Header *hdr, size_t req_size)
 static
 bool hdr_can_merge(Header *left, Header *right)
 {
-    // FIXME
-    (void)left;
-    (void)right;
-    return false;
+    if (left == NULL || right == (Header *)&first_arena[1] || right == left) {
+      return false;
+    }
+
+    if (left->asize != 0 || right->asize != 0) {
+      return false;
+    }
+
+    return true;
 }
 
 /**
@@ -189,9 +195,12 @@ bool hdr_can_merge(Header *left, Header *right)
 static
 void hdr_merge(Header *left, Header *right)
 {
-    (void)left;
-    (void)right;
-    // FIXME
+    left->next = right->next;
+    // FIXME Do we also add sizeof(Header)??
+    left->size = left->size + (right->size + sizeof(Header));
+    left->asize = 0;
+    right->size = 0;
+    right->asize = 0;
 }
 
 static
@@ -231,9 +240,22 @@ Header *best_fit(size_t size)
     best_fit_hdr->asize = size;
     return best_fit_hdr;
   }
+}
 
 
+static
+Header *hdr_prev(Header *act)
+{
+  Header *tmp_hdr = act;
 
+  if (act == (Header *)&first_arena[1]) return NULL;
+  while(1){
+    if (tmp_hdr->next == act) {
+      return tmp_hdr;
+    }
+    tmp_hdr = tmp_hdr->next;
+  }
+  return NULL;
 }
 
 /**
@@ -281,10 +303,27 @@ void mfree(void *ptr)
   // &tmp_free[1] is then adress of a data block behind the header
   while(1){
     if (ptr == &tmp_free[1]){
+      tmp_free->asize = 0;
+      while(1) {
+        if (hdr_can_merge(tmp_free, tmp_free->next) == false && hdr_can_merge(hdr_prev(tmp_free), tmp_free) == false) {
+          break;
+        }
+
+        //// Maybe else if ??? FIXME SOMETHING IS POTENTIONALLY INCORRECT HERE
+        if (hdr_can_merge(tmp_free, tmp_free->next)) {
+          hdr_merge(tmp_free, tmp_free->next);
+        }
+
+        if (hdr_can_merge(hdr_prev(tmp_free), tmp_free)) {
+          tmp_free = hdr_prev(tmp_free);
+          hdr_merge(tmp_free, tmp_free->next);
+        }
+      }
       break;
     }
     tmp_free = tmp_free->next;
   }
+
 
 }
 
