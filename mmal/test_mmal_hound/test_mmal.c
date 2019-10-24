@@ -2,11 +2,6 @@
 #include <assert.h>
 #include "mmal.h"
 #include <unistd.h>
-#include <string.h>
-#include <time.h>
-
-#define log_info(M, ...) fprintf(stdout, "[INFO] (%s:%d) " M "\n",\
-__FILE__, __LINE__, ##__VA_ARGS__)
 
 void debug_hdr(Header *h, int idx)
 {
@@ -151,7 +146,7 @@ int main()
     // Uvolneni prostredniho bloku
     log_info("Freeing second");
     mfree(p2);
-    //assert(first_arena == NULL); // cleanup arenas
+    assert(first_arena == NULL); // cleanup arenas
     /**
      *                p1          p2          p3
      *   +-----+------+----------------------------------------+
@@ -165,7 +160,7 @@ int main()
     log_info("Mallocing p4");
     void *p4 = mmalloc(PAGE_SIZE*2);
     debug_arenas();
-
+   
     log_info("Freeing p4");
     mfree(p4);
     debug_arenas();
@@ -231,7 +226,7 @@ int main()
     log_info("Freeing p4");
     mfree(p4);
     debug_arenas();
-    //assert(first_arena->next->next == NULL);
+    assert(first_arena->next->next == NULL);
 
     log_info("Freeing p5");
     mfree(p5);
@@ -240,12 +235,12 @@ int main()
     log_info("Freeing p6");
     mfree(p6);
     debug_arenas();
-    /*assert(first_arena->next == NULL);
+    assert(first_arena->next == NULL);
     hdr = (Header*)(&first_arena[1]);
     assert(hdr->asize == 0);
     assert(hdr->next->asize == 1);
     assert(hdr->next->next->asize == 0);
-    assert(hdr->next->next->next == hdr);*/
+    assert(hdr->next->next->next == hdr);
 
     log_info("Freeing p2");
     mfree(p2);
@@ -257,7 +252,7 @@ int main()
 
     #define REPS 5
 
-    srand(time(NULL));
+    srand(time(NULL)); 
     void *ptrs[REPS];
     for(int i = 0; i < REPS; i ++){
         int fuzz = rand()%100000;
@@ -276,15 +271,10 @@ int main()
     // ***** realloc testing
     log_info("Realloc basse, mallocing PAGE_SIZE * 4");
     p3 = mmalloc(PAGE_SIZE * 4);
-    memset(p3, 'k', PAGE_SIZE * 4);
     debug_arenas();
 
     log_info("shrinking to PAGE_SIZE");
     p3 = mrealloc(p3, PAGE_SIZE);
-
-    assert(((char *)p3)[5] == 'k');
-    assert(((char *)p3)[0] == 'k');
-    assert(((char *)p3)[PAGE_SIZE - 1] == 'k');
     debug_arenas();
 
        log_info("enlarging to PAGE_SIZE * 2 to merge");
